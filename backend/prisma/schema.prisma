@@ -1,0 +1,147 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  DRIVER
+}
+
+enum VehicleStatus {
+  ACTIVE
+  IDLE
+  MAINTENANCE
+  RETIRED
+}
+
+enum MaintenanceStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum AlertSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+model User {
+  id            String         @id @default(uuid())
+  email         String         @unique
+  passwordHash  String
+  name          String
+  role          Role           @default(DRIVER)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  refreshTokens RefreshToken[]
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  tokenHash String    @unique
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model Driver {
+  id            String    @id @default(uuid())
+  name          String
+  licenseNumber String    @unique
+  phone         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  vehicles      Vehicle[]
+}
+
+model Vehicle {
+  id          String              @id @default(uuid())
+  plate       String              @unique
+  vin         String              @unique
+  make        String
+  model       String
+  year        Int
+  status      VehicleStatus       @default(IDLE)
+  odometerKm  Int                 @default(0)
+  driverId    String?
+  driver      Driver?             @relation(fields: [driverId], references: [id], onDelete: SetNull)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  positions   PositionLog[]
+  healthLogs  HealthReading[]
+  maintenance MaintenanceRecord[]
+  alerts      Alert[]
+
+  @@index([status])
+  @@index([driverId])
+}
+
+model PositionLog {
+  id         String   @id @default(uuid())
+  vehicleId  String
+  vehicle    Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  lat        Float
+  lng        Float
+  speedKph   Float    @default(0)
+  heading    Float    @default(0)
+  recordedAt DateTime @default(now())
+
+  @@index([vehicleId, recordedAt])
+}
+
+model HealthReading {
+  id              String   @id @default(uuid())
+  vehicleId       String
+  vehicle         Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  engineTempC     Float
+  fuelLevelPct    Float
+  batteryVoltage  Float
+  tirePressureKpa Float
+  oilLifePct      Float
+  healthScore     Int
+  recordedAt      DateTime @default(now())
+
+  @@index([vehicleId, recordedAt])
+}
+
+model MaintenanceRecord {
+  id          String            @id @default(uuid())
+  vehicleId   String
+  vehicle     Vehicle           @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  type        String
+  description String?
+  status      MaintenanceStatus @default(SCHEDULED)
+  scheduledAt DateTime
+  completedAt DateTime?
+  costCents   Int?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@index([vehicleId, status])
+}
+
+model Alert {
+  id           String        @id @default(uuid())
+  vehicleId    String
+  vehicle      Vehicle       @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  type         String
+  severity     AlertSeverity
+  message      String
+  acknowledged Boolean       @default(false)
+  createdAt    DateTime      @default(now())
+
+  @@index([vehicleId, createdAt])
+  @@index([acknowledged, severity])
+}
